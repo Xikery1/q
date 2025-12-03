@@ -1,0 +1,894 @@
+# flutter
+
+
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'game_pause.dart';
+import 'game_over.dart';
+
+class ItemType {
+  final String key;
+  final String assetPath;
+  final int scoreDelta;
+  final int hpDelta;
+  final int timeDelta;
+
+  const ItemType({
+    required this.key,
+    required this.assetPath,
+    required this.scoreDelta,
+    required this.hpDelta,
+    required this.timeDelta,
+  });
+
+  bool get isBad => hpDelta < 0 || scoreDelta < 0;
+}
+
+// ---- Константы типов предметов ----
+const ItemType baguette = ItemType(
+  key: 'baguette',
+  assetPath: 'assets/images/baguette.png',
+  scoreDelta: 10,
+  hpDelta: 0,
+  timeDelta: 0,
+);
+
+const ItemType macaron = ItemType(
+  key: 'macaron',
+  assetPath: 'assets/images/macaron.png',
+  scoreDelta: 20,
+  hpDelta: 0,
+  timeDelta: 0,
+);
+
+const ItemType puff = ItemType(
+  key: 'puff',
+  assetPath: 'assets/images/puff.png',
+  scoreDelta: 30,
+  hpDelta: 0,
+  timeDelta: 30,
+);
+
+const ItemType fishbone = ItemType(
+  key: 'fishbone',
+  assetPath: 'assets/images/fishbone.png',
+  scoreDelta: -20,
+  hpDelta: -1,
+  timeDelta: 0,
+);
+
+const ItemType bone = ItemType(
+  key: 'bone',
+  assetPath: 'assets/images/bone.png',
+  scoreDelta: -10,
+  hpDelta: 0,
+  timeDelta: 0,
+);
+
+const List<ItemType> allItemTypes = [baguette, macaron, puff, fishbone, bone];
+
+class FallingItem {
+  double x;
+  double y;
+  double speed;
+  ItemType type;
+
+  FallingItem({
+    required this.x,
+    required this.y,
+    required this.speed,
+    required this.type,
+  });
+}
+
+class GamePage extends StatefulWidget {
+  const GamePage({super.key});
+
+  @override
+  State<GamePage> createState() => _GamePageState();
+}
+
+class _GamePageState extends State<GamePage> {
+  final Random _random = Random();
+
+  static const int _startTime = 30;
+  int timeLeft = _startTime;
+  int hp = 3;
+  int score = 0;
+
+  int _nextSpeedScore = 100;
+  int _nextHpBonusScore = 50;
+
+  double playerX = 0.5;
+
+  final List<FallingItem> items = [];
+  final Map<String, int> itemCounts = {};
+
+  Timer? _gameTimer;
+  Timer? _countdownTimer;
+  bool _isGameOver = false;
+
+  static const double _baseItemSpeed = 180.0;
+  int _speedLevel = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initItems();
+    _startLoop();
+    _startCountdown();
+  }
+
+  @override
+  void dispose() {
+    _gameTimer?.cancel();
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _initItems() {
+    items.clear();
+    for (int i = 0; i < 9; i++) {
+      final item = FallingItem(x: 0, y: 0, speed: 0, type: allItemTypes.first);
+      _resetItem(item);
+      items.add(item);
+    }
+  }
+
+  void _resetItem(FallingItem item) {
+    item.y = -_random.nextInt(300).toDouble();
+    item.x = _random.nextDouble();
+    item.type = allItemTypes[_random.nextInt(allItemTypes.length)];
+
+    final bool isBad = item.type.isBad;
+    final double base = isBad ? _baseItemSpeed * 0.5 : _baseItemSpeed;
+    final double randomDelta = isBad ? 40.0 : 80.0;
+
+    item.speed = base + _random.nextDouble() * randomDelta;
+  }
+
+  void _startLoop() {
+    _gameTimer?.cancel();
+    _gameTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!mounted || _isGameOver) return;
+      setState(_updateItems);
+    });
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _isGameOver) return;
+      if (timeLeft > 0) {
+        setState(() => timeLeft--);
+      } else {
+        _endGame();
+      }
+    });
+  }
+
+  void _checkScoreThresholds() {
+    while (score >= _nextSpeedScore) {
+      _speedLevel++;
+      _nextSpeedScore += 100;
+    }
+
+    while (score >= _nextHpBonusScore) {
+      hp++;
+      _nextHpBonusScore += 50;
+    }
+  }
+
+  void _updateItems() {
+    final size = MediaQuery.of(context).size;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final safeHeight = size.height - safeBottom;
+    final w = size.width;
+
+    final playerW = w * 0.2;
+    final playerH = safeHeight * 0.12;
+    final playerY = safeHeight - playerH - 30;
+
+    final playerRect = Rect.fromLTWH(
+      playerX * w - playerW / 2,
+      playerY,
+      playerW,
+      playerH,
+    );
+
+    final double speedMultiplier = 1.0 + _speedLevel * 0.25;
+
+    for (final item in items) {
+      item.y += item.speed * speedMultiplier * 0.016;
+
+      if (item.y > safeHeight) {
+        hp--;
+        if (hp <= 0) {
+          _endGame();
+          return;
+        }
+        _resetItem(item);
+        continue;
+      }
+
+      const itemSize = 50.0;
+      final itemRect = Rect.fromLTWH(
+        item.x * w - itemSize / 2,
+        item.y,
+        itemSize,
+        itemSize,
+      );
+
+      if (playerRect.overlaps(itemRect)) {
+        final t = item.type;
+        itemCounts[t.key] = (itemCounts[t.key] ?? 0) + 1;
+
+        score += t.scoreDelta;
+        hp += t.hpDelta;
+        timeLeft += t.timeDelta;
+        if (timeLeft > _startTime) timeLeft = _startTime;
+
+        if (hp <= 0 || timeLeft <= 0) {
+          _endGame();
+          return;
+        }
+
+        if (t.scoreDelta > 0) _checkScoreThresholds();
+        _resetItem(item);
+      }
+    }
+  }
+
+  String _formatTime(int sec) => "00:${sec.toString().padLeft(2, '0')}";
+
+  void _endGame() async {
+    if (_isGameOver) return;
+    _isGameOver = true;
+    _gameTimer?.cancel();
+    _countdownTimer?.cancel();
+
+    final playedSeconds = _startTime - timeLeft;
+    if (timeLeft < 0) timeLeft = 0;
+
+    // --- получение ника из SharedPreferences ---
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username') ?? 'Player';
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GameOverPage(
+          score: score,
+          timeSeconds: playedSeconds,
+          itemCounts: Map<String, int>.from(itemCounts),
+          username: username, // <-- передаем ник
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pauseGame() async {
+    _gameTimer?.cancel();
+    _countdownTimer?.cancel();
+
+    final result = await Navigator.of(context).push<String>(
+      PageRouteBuilder(
+        opaque: false,
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        pageBuilder: (_, __, ___) => const GamePausePage(),
+      ),
+    );
+
+    if (!mounted || _isGameOver) return;
+
+    if (result == 'resume') {
+      _startLoop();
+      _startCountdown();
+    } else if (result == 'restart') {
+      setState(() {
+        score = 0;
+        hp = 3;
+        timeLeft = _startTime;
+        _nextSpeedScore = 100;
+        _nextHpBonusScore = 50;
+        _speedLevel = 0;
+        itemCounts.clear();
+        _isGameOver = false;
+        _initItems();
+      });
+      _startLoop();
+      _startCountdown();
+    } else if (result == 'quit') {
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+    }
+  }
+
+  Widget _woodStat({
+    required String boardImage,
+    required String iconImage,
+    required String text,
+  }) {
+    return Stack(
+      alignment: Alignment.centerLeft,
+      children: [
+        Image.asset(boardImage, height: 36, fit: BoxFit.contain),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(iconImage, width: 20, height: 20),
+              const SizedBox(width: 6),
+              Text(
+                text,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final safeTop = MediaQuery.of(context).padding.top;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final safeHeight = size.height - safeTop - safeBottom;
+    final w = size.width;
+
+    final playerW = w * 0.2;
+    final playerH = safeHeight * 0.12;
+    final playerY = safeHeight - playerH - 30;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Align(
+              alignment: Alignment.topCenter,
+              child: Image.asset(
+                "assets/images/bottom_bg.png",
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Image.asset(
+                "assets/images/bottom_bg.png",
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+              ),
+            ),
+
+            Positioned(
+              top: 30,
+              left: 10,
+              right: 10,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _woodStat(
+                        boardImage: "assets/images/title_bg.png",
+                        iconImage: "assets/images/board.png",
+                        text: score.toString(),
+                      ),
+                      const SizedBox(height: 4),
+                      _woodStat(
+                        boardImage: "assets/images/title_bg.png",
+                        iconImage: "assets/images/life.png",
+                        text: "x$hp",
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "Time : ${_formatTime(timeLeft)}",
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: _pauseGame,
+                    child: Image.asset(
+                      "assets/images/stop.png",
+                      width: 36,
+                      height: 36,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            ...items.map((item) {
+              const itemSize = 50.0;
+              return Positioned(
+                left: item.x * w - itemSize / 2,
+                top: item.y,
+                child: Image.asset(
+                  item.type.assetPath,
+                  width: itemSize,
+                  height: itemSize,
+                ),
+              );
+            }),
+
+            Positioned(
+              left: playerX * w - playerW / 2,
+              top: playerY,
+              child: GestureDetector(
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    playerX += details.delta.dx / w;
+                    playerX = playerX.clamp(0.05, 0.95);
+                  });
+                },
+                child: Image.asset(
+                  "assets/images/player.png",
+                  width: playerW,
+                  height: playerH,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+________________________________________________________________________
+//Game stop 
+// game_pause.dart
+import 'package:flutter/material.dart';
+import 'game_restart.dart';
+import 'game_quit.dart';
+
+class GamePausePage extends StatelessWidget {
+  const GamePausePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: () {},
+          child: Container(
+            color: Colors.transparent,
+            width: double.infinity,
+            height: double.infinity,
+          ),
+        ),
+        // Центр диалога
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Game pause",
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Resume
+              GestureDetector(
+                onTap: () => Navigator.pop(context, 'resume'),
+                child: Image.asset(
+                  "assets/images/play.png",
+                  width: 48,
+                  height: 50,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Restart с диалогом
+              GestureDetector(
+                onTap: () async {
+                  bool? restartConfirmed = await showDialog<bool>(
+                    context: context,
+                    barrierColor: Colors.black54,
+                    builder: (_) => const GameRestartPage(),
+                  );
+                  if (restartConfirmed == true) {
+                    Navigator.pop(context, 'restart');
+                  }
+                },
+                child: Image.asset(
+                  "assets/images/restart.png",
+                  width: 48,
+                  height: 48,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Quit с диалогом
+              GestureDetector(
+                onTap: () async {
+                  bool? quitConfirmed = await showDialog<bool>(
+                    context: context,
+                    barrierColor: Colors.black54,
+                    builder: (_) => const GameQuitPage(),
+                  );
+                  if (quitConfirmed == true) {
+                    Navigator.pop(context, 'quit');
+                  }
+                },
+                child: Image.asset(
+                  "assets/images/out.png",
+                  width: 48,
+                  height: 48,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+---------------------------
+game over 
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'game_rankings.dart';
+
+class GameOverPage extends StatelessWidget {
+  final int score;
+  final int timeSeconds;
+  final Map<String, int> itemCounts;
+  final String username; // Ник игрока
+
+  const GameOverPage({
+    super.key,
+    required this.score,
+    required this.timeSeconds,
+    required this.itemCounts,
+    required this.username,
+  });
+
+  String _formatTime(int sec) {
+    final m = (sec ~/ 60).toString().padLeft(2, '0');
+    final s = (sec % 60).toString().padLeft(2, '0');
+    return "$m:$s";
+  }
+
+  Future<void> _saveRecordAndGoToRankings(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('records') ?? [];
+
+    // формируем запись: "username|score|time"
+    final record = "$username|$score|${_formatTime(timeSeconds)}";
+    list.add(record);
+
+    await prefs.setStringList('records', list);
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const RankingsPage()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    int c(String key) => itemCounts[key] ?? 0;
+
+    final rows = <_ItemRow>[
+      _ItemRow(
+        asset: 'assets/images/baguette_box.png',
+        countLabel: 'x${c('baguette')}',
+        valueLabel: '+10',
+      ),
+      _ItemRow(
+        asset: 'assets/images/macaron_box.png',
+        countLabel: 'x${c('macaron')}',
+        valueLabel: '+20',
+      ),
+      _ItemRow(
+        asset: 'assets/images/puff_box.png',
+        countLabel: 'x${c('puff')}',
+        valueLabel: '+30',
+      ),
+      _ItemRow(
+        asset: 'assets/images/fishbone_box.png',
+        countLabel: 'x${c('fishbone')}',
+        valueLabel: '-20, HP-1',
+      ),
+      _ItemRow(
+        asset: 'assets/images/bone_box.png',
+        countLabel: 'x${c('bone')}',
+        valueLabel: '-10',
+      ),
+    ];
+
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Align(
+              alignment: Alignment.topCenter,
+              child: Image.asset(
+                "assets/images/bottom_bg.png",
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Image.asset(
+                "assets/images/bottom_bg.png",
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+              ),
+            ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Game over',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ...rows.map(
+                      (r) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Image.asset(r.asset, width: 40, height: 40),
+                                const SizedBox(width: 8),
+                                Text(
+                                  r.countLabel,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              r.valueLabel,
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'TIME',
+                          style: TextStyle(
+                            fontSize: 25,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(_formatTime(timeSeconds)),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'SCORE',
+                          style: TextStyle(
+                            fontSize: 25,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(score.toString()),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => _saveRecordAndGoToRankings(context),
+                        child: Container(
+                          width: 140,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              "Next →",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              right: 10,
+              bottom: 20,
+              child: Image.asset(
+                'assets/images/player.png',
+                width: 80,
+                height: 80,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ItemRow {
+  final String asset;
+  final String countLabel;
+  final String valueLabel;
+
+  _ItemRow({
+    required this.asset,
+    required this.countLabel,
+    required this.valueLabel,
+  });
+}
+-------------------------
+game quit
+
+// game_quit.dart
+import 'package:flutter/material.dart';
+
+class GameQuitPage extends StatelessWidget {
+  const GameQuitPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: () => Navigator.pop(context, false),
+          child: Container(
+            color: Colors.black54,
+            width: double.infinity,
+            height: double.infinity,
+          ),
+        ),
+        Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Abandon progress and quit the game?",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("No"),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text("Yes"),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+--------------------------------------------
+game restart
+
+// game_restart.dart
+import 'package:flutter/material.dart';
+
+class GameRestartPage extends StatelessWidget {
+  const GameRestartPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: () =>
+              Navigator.pop(context, false), // закрываем при клике на фон
+          child: Container(
+            color: Colors.black54,
+            width: double.infinity,
+            height: double.infinity,
+          ),
+        ),
+        Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Abandon progress and restart the game?",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("No"),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text("Yes"),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+# flutter_aplication_1
