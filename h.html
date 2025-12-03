@@ -891,4 +891,176 @@ class GameRestartPage extends StatelessWidget {
     );
   }
 }
+--------------------------
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+      class RankingsPage extends StatefulWidget {
+  const RankingsPage({super.key});
+
+  @override
+  State<RankingsPage> createState() => _RankingsPageState();
+}
+
+class _RankingsPageState extends State<RankingsPage> {
+  List<_Record> records = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecords();
+  }
+
+  Future<void> _loadRecords() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('records') ?? [];
+
+    final parsed = list.map((e) {
+      final parts = e.split('|'); // "username|score|time"
+      final name = parts[0];
+      final score = int.tryParse(parts[1]) ?? 0;
+      final time = parts[2];
+      return _Record(name: name, score: score, time: time);
+    }).toList();
+
+    parsed.sort((a, b) => b.score.compareTo(a.score)); // по убыванию очков
+
+    if (mounted) {
+      setState(() {
+        records = parsed;
+      });
+    }
+  }
+
+
+    @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Верхняя рамка
+            Align(
+              alignment: Alignment.topCenter,
+              child: Image.asset(
+                "assets/images/bottom_bg.png",
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+              ),
+            ),
+            // Нижняя рамка
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Image.asset(
+                "assets/images/bottom_bg.png",
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+              ),
+            ),
+            Column(
+              children: [
+                const SizedBox(height: 40),
+                const Text(
+                  'Rankings',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: const [
+                      Text('Rank'),
+                      Text('Name'),
+                      Text('Time'),
+                      Text('Score'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Divider(thickness: 1),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Column(
+                    children: records.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final record = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text((index + 1).toString()),
+                            Text(record.name),
+                            Text(record.time),
+                            Text(record.score.toString()),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Text(
+                    '- Tap To Retry -',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
+            Positioned(
+              right: 10,
+              bottom: 30,
+              child: Image.asset(
+                'assets/images/player.png',
+                width: 120,
+                height: 120,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Record {
+  final String name;
+  final int score;
+  final String time;
+
+  _Record({required this.name, required this.score, required this.time});
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+
+
+
+
+
+
+
+
+
+
+
+
+      
+      
 # flutter_aplication_1
