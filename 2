@@ -1,0 +1,1984 @@
+// main
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'providers/cart_provider.dart';
+import 'pages/home_page.dart';
+import 'pages/cart_page.dart';
+import 'pages/checkout_page.dart';
+
+void main() {
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+
+      // 🔥 МІНДЕТТІ
+      routes: {
+        '/': (context) => const HomePage(),
+        '/cart': (context) => const CartPage(),
+        '/checkout': (context) => const CheckoutPage(),
+      },
+
+      initialRoute: '/',
+    );
+  }
+}
+// food_detail_dialog
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/food.dart';
+import '../providers/cart_provider.dart';
+
+void showFoodDetailDialog(BuildContext context, Food food) {
+  int qty = 1;
+
+  showDialog(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) {
+      return Center(
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            width: 600,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          food.imageUrl,
+                          height: 250,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          food.name,
+                          style: const TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      Row(
+                        children: List.generate(
+                          5,
+                              (i) => Icon(
+                            i < food.score.round()
+                                ? Icons.star
+                                : Icons.star_border,
+                            color: Colors.amber,
+                            size: 26,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      Text(
+                        food.remark,
+                        style: const TextStyle(fontSize: 16),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    qty = (qty - 1).clamp(1, 999);
+                                  });
+                                },
+                                child: const CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: Colors.black12,
+                                  child: Icon(Icons.remove, size: 25),
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              Text(
+                                qty.toString(),
+                                style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 20),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    qty++;
+                                  });
+                                },
+                                child: const CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: Colors.black12,
+                                  child: Icon(Icons.add, size: 25),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 40, vertical: 18),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () {
+                              final cart = Provider.of<CartProvider>(
+                                  context,
+                                  listen: false);
+
+                              cart.add
+                                (food, qty);
+
+                              Navigator.pop(context);
+                            },
+                            child: const Text(
+                              "Submit",
+                              style: TextStyle(fontSize: 18),
+                            ),
+                          )
+                        ],
+                      )
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+// cart_side_modal.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/cart_provider.dart';
+import '../models/food.dart';
+
+class CartSideModal extends StatelessWidget {
+  const CartSideModal({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = Provider.of<CartProvider>(context);
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Material(
+        color: Colors.white,
+        child: SizedBox(
+          width: 450,
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+
+              /// TOP ROW
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  /// CLEAR ALL
+                  TextButton(
+                    onPressed: () {
+                      cart.clearAll();
+                    },
+                    child: const Text(
+                      "Clear all",
+                      style: TextStyle(fontSize: 18, color: Colors.red),
+                    ),
+                  ),
+
+                  const Text(
+                    "Cart",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  /// CLOSE
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      "Close",
+                      style: TextStyle(fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+
+              /// SUBMIT ORDER button
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.blue),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: GestureDetector(
+                    onTap: () {
+                      _confirmOrder(context);
+                    },
+                    child: const Text(
+                      "Submit order",
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              Expanded(
+                child: ListView(
+                  children: cart.items.entries.map((e) {
+                    Food food = e.key;
+                    int qty = e.value;
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.black26),
+                      ),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.asset(
+                              food.imageUrl,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          /// NAME + PRICE
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  food.name,
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Price: \$${food.price}",
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          /// QTY + BUTTONS
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () =>
+                                    cart.decrease(food),
+                                child: const CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: Colors.black12,
+                                  child: Icon(Icons.remove),
+                                ),
+                              ),
+                              Padding(
+                                padding:
+                                const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text(
+                                  qty.toString(),
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () =>
+                                    cart.increase(food),
+                                child: const CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: Colors.black12,
+                                  child: Icon(Icons.add),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          /// DELETE BUTTON
+                          const SizedBox(width: 10),
+                          TextButton(
+                            onPressed: () => cart.remove(food),
+                            child: const Text(
+                              "Delete",
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.red,
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmOrder(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: "Order Confirm",
+      builder: (context) {
+        return Center(
+          child: Material(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 300,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Notice",
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  const Text(
+                    "Whether to submit an order",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 25),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          "No",
+                          style: TextStyle(fontSize: 16, color: Colors.red),
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);           // close dialog
+                          Navigator.pop(context);           // close cart modal
+                          Navigator.pushNamed(context, '/checkout'); // page
+                        },
+                        child: const Text("Yes"),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+// cart_provider.dart
+
+import 'package:flutter/foundation.dart';
+import '../models/food.dart';
+
+class CartProvider extends ChangeNotifier {
+  final Map<Food, int> _items = {};
+
+  Map<Food, int> get items => _items;
+
+  void add(Food food, int qty) {
+    if (_items.containsKey(food)) {
+      _items[food] = _items[food]! + qty;
+    } else {
+      _items[food] = qty;
+    }
+    notifyListeners();
+  }
+
+  void increase(Food food) {
+    _items[food] = (_items[food] ?? 0) + 1;
+    notifyListeners();
+  }
+
+  void decrease(Food food) {
+    if (!_items.containsKey(food)) return;
+
+    if (_items[food]! > 1) {
+      _items[food] = _items[food]! - 1;
+    } else {
+      _items.remove(food);
+    }
+    notifyListeners();
+  }
+
+  /// ✅ ҚОСЫЛДЫ — remove()
+  void remove(Food food) {
+    if (_items.containsKey(food)) {
+      _items.remove(food);
+      notifyListeners();
+    }
+  }
+
+  void clear() {
+    _items.clear();
+    notifyListeners();
+  }
+
+  void clearAll() {
+    _items.clear();
+    notifyListeners();
+  }
+
+  int totalItems() {
+    int total = 0;
+    _items.forEach((key, value) => total += value);
+    return total;
+  }
+
+  double totalPrice() {
+    double sum = 0;
+    _items.forEach((food, qty) => sum += food.price * qty);
+    return sum;
+  }
+}
+// success_page
+import 'package:flutter/material.dart';
+import 'home_page.dart';
+
+class SuccessPage extends StatefulWidget {
+  const SuccessPage({super.key});
+
+  @override
+  State<SuccessPage> createState() => _SuccessPageState();
+}
+
+class _SuccessPageState extends State<SuccessPage> {
+  double rating = 0;
+  final TextEditingController commentCtrl = TextEditingController();
+
+  String? errorMessage; // ❗ Қате көрсету үшін
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Successful checkout"),
+        centerTitle: true,
+      ),
+
+      body: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          children: [
+            const SizedBox(height: 20),
+
+            // ⭐ RATING
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ...List.generate(
+                  5,
+                      (i) => IconButton(
+                    icon: Icon(
+                      i < rating ? Icons.star : Icons.star_border,
+                      size: 40,
+                      color: Colors.orange,
+                    ),
+                    onPressed: () {
+                      setState(() => rating = i + 1);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  rating.toStringAsFixed(0),
+                  style: const TextStyle(fontSize: 26),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+
+            // ❗ Қате көрсететін жазу
+            if (errorMessage != null)
+              Text(
+                errorMessage!,
+                style: const TextStyle(color: Colors.red, fontSize: 16),
+              ),
+
+            const SizedBox(height: 20),
+
+            // COMMENT FIELD
+            TextField(
+              controller: commentCtrl,
+              maxLines: 5,
+              decoration: InputDecoration(
+                hintText: "Please enter your rating statement",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 40),
+
+            // SUBMIT BUTTON
+            ElevatedButton(
+              onPressed: () {
+                // ❗ Міндетті тексеру
+                if (rating == 0) {
+                  setState(() {
+                    errorMessage = "Please select a rating!";
+                  });
+                  return;
+                }
+                if (commentCtrl.text.trim().isEmpty) {
+                  setState(() {
+                    errorMessage = "Please enter your comment!";
+                  });
+                  return;
+                }
+
+                // -> HomePage
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const HomePage()),
+                      (_) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 50, vertical: 18),
+              ),
+              child: const Text(
+                "Submit",
+                style: TextStyle(fontSize: 20),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+//menu_page.dart
+
+import 'dart:convert';
+import 'dart:math';
+import 'package:flutter/material.dart';
+import '../models/food.dart';
+import '../widgets/food_detail_dialog.dart';
+
+class MenuPage extends StatefulWidget {
+  const MenuPage({super.key});
+
+  @override
+  State<MenuPage> createState() => _MenuPageState();
+}
+
+class _MenuPageState extends State<MenuPage> {
+  List<Food> allFoods = [];
+  List<Food> recommended = [];
+  List<Food> hot = [];
+  bool loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!loaded) {
+      loadFoods();
+      loaded = true;
+    }
+  }
+
+  Future<void> loadFoods() async {
+    final jsonString = await DefaultAssetBundle.of(context)
+        .loadString("lib/data/food_menu.json");
+
+    final List data = json.decode(jsonString);
+
+    allFoods = data.map((e) => Food.fromJson(e)).toList();
+
+    // Rating 4.5 - 5 only
+    List<Food> highRated =
+    allFoods.where((f) => f.score >= 4.5).toList();
+
+    highRated.shuffle(Random());
+    recommended = highRated.take(5).toList();
+
+    highRated.shuffle(Random());
+    hot = highRated.take(5).toList();
+
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (allFoods.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          "Recommended",
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        buildHorizontalList(recommended),
+
+        const SizedBox(height: 30),
+
+        const Text(
+          "Hot",
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        buildHorizontalList(hot),
+      ],
+    );
+  }
+
+  Widget buildHorizontalList(List<Food> foods) {
+    return SizedBox(
+      height: 220,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: foods.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemBuilder: (context, index) {
+          final f = foods[index];
+
+          return GestureDetector(
+            onTap: () {
+              showFoodDetailDialog(context, f);
+            },
+            child: Container(
+              width: 280,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black26),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  // IMAGE
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      f.imageUrl,
+                      width: 120,
+                      height: 180,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+
+                  const SizedBox(width: 10),
+
+                  // TEXT
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          f.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        Row(
+                          children: List.generate(
+                            5,
+                                (i) => Icon(
+                              i < f.score.round()
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              size: 18,
+                              color: Colors.amber,
+                            ),
+                          ),
+                        ),
+
+                        Text(
+                          f.remark,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+//home_page.dart
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/cart_provider.dart';
+import 'menu_page.dart';
+import 'category_page.dart';
+import '../widgets/cart_side_modal.dart';   // 👈 side-modal import
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int currentIndex = 0;
+
+  final pages = const [
+    MenuPage(),
+    CategoryPage(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = Provider.of<CartProvider>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          currentIndex == 0 ? "Menu" : "Category",
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+
+        actions: [
+          TextButton(
+            onPressed: () {
+              /// ---- SIDE CART ----
+              showGeneralDialog(
+                context: context,
+                barrierDismissible: true,
+                barrierLabel: "Cart dialog",   // ← міндетті!
+                barrierColor: Colors.black.withOpacity(0.4),
+                transitionDuration: const Duration(milliseconds: 300),
+                pageBuilder: (_, __, ___) {
+                  return const CartSideModal();
+                },
+                transitionBuilder: (_, anim, __, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(1, 0),
+                      end: Offset.zero,
+                    ).animate(anim),
+                    child: child,
+                  );
+                },
+              );
+            },
+            child: Text(
+              "Cart (${cart.totalItems()})",
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        ],
+      ),
+
+      body: pages[currentIndex],
+
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: currentIndex,
+        selectedItemColor: Colors.orange,
+        unselectedItemColor: Colors.grey,
+        onTap: (i) => setState(() => currentIndex = i),
+        items: const [
+          BottomNavigationBarItem(
+            icon: SizedBox.shrink(),   // 👈 ЛОГО ЖОҚ
+            label: "Menu",
+          ),
+          BottomNavigationBarItem(
+            icon: SizedBox.shrink(),   // 👈 ЛОГО ЖОҚ
+            label: "Category",
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+//checkout_page.dart
+
+import 'dart:async';
+import 'package:flutter/material.dart';
+import '../providers/cart_provider.dart';
+import 'package:provider/provider.dart';
+import 'home_page.dart';
+import 'success_page.dart';
+
+class CheckoutPage extends StatefulWidget {
+  const CheckoutPage({super.key});
+
+  @override
+  State<CheckoutPage> createState() => _CheckoutPageState();
+}
+
+class _CheckoutPageState extends State<CheckoutPage> {
+  Map<String, String> status = {};
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _initStatuses();
+    _startStatusTimer();
+  }
+
+  void _initStatuses() {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    for (var food in cart.items.keys) {
+      status[food.name] = "Order placed";
+    }
+  }
+
+  void _startStatusTimer() {
+    timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      setState(() {
+        status.forEach((key, value) {
+          if (value == "Order placed") {
+            status[key] = "Cooking";
+          } else if (value == "Cooking") {
+            status[key] = "Served";
+          }
+        });
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = Provider.of<CartProvider>(context);
+    final entries = cart.items.entries.toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Checkout"),
+        centerTitle: true,
+      ),
+
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: entries.length,
+              itemBuilder: (_, i) {
+                final food = entries[i].key;
+                final qty = entries[i].value;
+                final st = status[food.name] ?? "Order placed";
+
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.black26),
+                  ),
+                  child: Row(
+                    children: [
+                      Image.asset(food.imageUrl,
+                          width: 80, height: 80, fit: BoxFit.cover),
+                      const SizedBox(width: 14),
+
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(food.name,
+                                style: const TextStyle(
+                                    fontSize: 20, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text("Count: $qty"),
+
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Text("Status: "),
+                                Text(
+                                  st,
+                                  style: TextStyle(
+                                    color: st == "Order placed"
+                                        ? Colors.black
+                                        : st == "Cooking"
+                                        ? Colors.orange
+                                        : Colors.green,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      Column(
+                        children: [
+                          Text(
+                            "\$${(food.price * qty).toStringAsFixed(2)}",
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 18),
+                          ),
+                          const SizedBox(height: 10),
+
+                          // CLEAR button
+                          TextButton(
+                            onPressed: st == "Order placed"
+                                ? () {
+                              setState(() {
+                                cart.remove(food);
+                                status.remove(food.name);
+                              });
+                            }
+                                : null,
+                            child: const Text(
+                              "Clear",
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // TOTAL + BUTTONS
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)],
+            ),
+            child: Column(
+              children: [
+                Text(
+                  "Total: \$${cart.totalPrice().toStringAsFixed(2)}",
+                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(builder: (_) => const HomePage()),
+                                  (_) => false);
+                        },
+                        child: const Text("Add dish"),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          _showCheckoutConfirm(context);
+                        },
+                        child: const Text("Checkout"),
+                      ),
+                    ),
+                  ],
+                )
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showCheckoutConfirm(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierLabel: "Checkout confirm",
+      builder: (_) => AlertDialog(
+        title: const Text("Notice"),
+        content: const Text("Confirm checkout?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("No")),
+          TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SuccessPage(),
+                  ),
+                );
+              },
+              child: const Text("Yes")),
+        ],
+      ),
+    );
+  }
+}
+
+//category_page.dart
+
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import '../models/food.dart';
+
+class CategoryPage extends StatefulWidget {
+  const CategoryPage({super.key});
+
+  @override
+  State<CategoryPage> createState() => _CategoryPageState();
+}
+
+class _CategoryPageState extends State<CategoryPage> {
+  List categories = [];
+  List<Food> allFoods = [];
+  String selectedType = "";
+  Map<String, int> qty = {};
+  bool loaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!loaded) {
+      loadData();
+      loaded = true;
+    }
+  }
+
+  Future<void> loadData() async {
+    final typeString = await DefaultAssetBundle.of(context)
+        .loadString("lib/data/food_type.json");
+    categories = json.decode(typeString);
+
+    final foodString = await DefaultAssetBundle.of(context)
+        .loadString("lib/data/food_menu.json");
+    final List data = json.decode(foodString);
+
+    allFoods = data.map((e) => Food.fromJson(e)).toList();
+
+    selectedType = categories.first["id"].toString();
+    setState(() {});
+  }
+
+  List<Food> get listFoods =>
+      allFoods.where((f) => f.typeId == selectedType).toList();
+
+  @override
+  Widget build(BuildContext context) {
+    if (categories.isEmpty || allFoods.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Row(
+      children: [
+        /// LEFT CATEGORY LIST
+        Container(
+          width: 90,
+          padding: const EdgeInsets.only(top: 10),
+          child: ListView.builder(
+            itemCount: categories.length,
+            itemBuilder: (_, i) {
+              final c = categories[i];
+              bool active = selectedType == c["id"].toString();
+
+              return GestureDetector(
+                onTap: () => setState(() => selectedType = c["id"].toString()),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  height: 55,
+                  decoration: BoxDecoration(
+                    color: active ? Colors.blue.shade100 : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: active ? Colors.blue : Colors.black26,
+                      width: 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      c["name"] ?? "Unknown",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: active ? Colors.blue : Colors.black,
+                        fontWeight:
+                        active ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        /// RIGHT FOOD LIST
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: listFoods.length,
+            itemBuilder: (_, i) {
+              final f = listFoods[i];
+              qty.putIfAbsent(f.name, () => 0);
+
+              return Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.black26),
+                ),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(
+                        f.imageUrl,
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    /// TEXT
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            f.name,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text("Price: \$${f.price.toStringAsFixed(2)}"),
+                          const SizedBox(height: 4),
+                          Text(
+                            f.remark,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    /// ADD/REMOVE BUTTONS
+                    Row(
+                      children: [
+                        if (qty[f.name]! > 0)
+                          GestureDetector(
+                            onTap: () => setState(() {
+                              qty[f.name] = (qty[f.name]! - 1).clamp(0, 999);
+                            }),
+                            child: const CircleAvatar(
+                              radius: 18,
+                              backgroundColor: Colors.black12,
+                              child: Icon(Icons.remove),
+                            ),
+                          ),
+
+                        if (qty[f.name]! > 0)
+                          Padding(
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              qty[f.name].toString(),
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+
+                        GestureDetector(
+                          onTap: () => setState(() {
+                            qty[f.name] = qty[f.name]! + 1;
+                          }),
+                          child: const CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Colors.black12,
+                            child: Icon(Icons.add),
+                          ),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// cart_page.dart
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/cart_provider.dart';
+import 'checkout_page.dart';
+
+class CartPage extends StatelessWidget {
+  const CartPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = Provider.of<CartProvider>(context);
+    final entries = cart.items.entries.toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Cart", style: TextStyle(fontSize: 24)),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => cart.clearAll(),
+            child: const Text("Clear all", style: TextStyle(color: Colors.red)),
+          )
+        ],
+      ),
+
+      body: entries.isEmpty
+          ? const Center(child: Text("Cart is empty"))
+          : Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: entries.length,
+              itemBuilder: (_, i) {
+                final food = entries[i].key;
+                final qty = entries[i].value;
+
+                return ListTile(
+                  leading: Image.asset(food.imageUrl,
+                      width: 60, height: 60, fit: BoxFit.cover),
+                  title: Text(food.name),
+                  subtitle: Text(
+                    "\$${(food.price * qty).toStringAsFixed(2)}",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove_circle),
+                        onPressed: () => cart.decrease(food),
+                      ),
+                      Text(qty.toString(),
+                          style: const TextStyle(fontSize: 18)),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle),
+                        onPressed: () => cart.increase(food),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => cart.remove(food),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Text(
+                  "Total: \$${cart.totalPrice().toStringAsFixed(2)}",
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+
+                // SUBMIT ORDER BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: entries.isEmpty
+                        ? null
+                        : () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text("Submit Order?"),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(context),
+                              child: const Text("No"),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                    const CheckoutPage(),
+                                  ),
+                                );
+                              },
+                              child: const Text("Yes"),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text(
+                      "Submit order",
+                      style:
+                      TextStyle(fontSize: 18, color: Colors.white),
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+//order_item.dart
+
+import 'food.dart';
+
+class OrderItem {
+  final Food food;
+  int quantity;
+  String status; // Order placed → Cooking → Served
+
+  OrderItem({
+    required this.food,
+    required this.quantity,
+    this.status = "Order placed",
+  });
+
+  double get totalPrice => food.price * quantity;
+}
+
+// food.dart
+
+import 'package:flutter/foundation.dart';
+
+class Food {
+  final String name;
+  final double price;
+  final String remark;
+  final String typeId;
+  final double score;
+  final String imageUrl;
+
+  const Food({
+    required this.name,
+    required this.price,
+    required this.remark,
+    required this.typeId,
+    required this.score,
+    required this.imageUrl,
+  });
+
+  factory Food.fromJson(Map<String, dynamic> json) {
+    return Food(
+      name: json['name'] ?? '',
+      price: double.tryParse(json['price'].toString()) ?? 0.0,
+      remark: json['remark'] ?? '',
+      typeId: json['type_id'] ?? '',
+      score: double.tryParse(json['score'].toString()) ?? 0.0,
+      imageUrl: "assets/images/${json['image_url']}",
+    );
+  }
+}
+
+// food_type.dart
+
+class FoodType {
+  final String id;
+  final String name;
+
+  FoodType({
+    required this.id,
+    required this.name,
+  });
+
+  factory FoodType.fromJson(Map<String, dynamic> json) {
+    return FoodType(
+      id: json['id'].toString(),
+      name: json['name'] ?? '',
+    );
+  }
+}
+
+// food_type.json
+
+[
+  {
+    "name": "Cheese and bread",
+    "id": "1"
+  },
+  {
+    "name": "Seafood",
+    "id": "2"
+  },
+  {
+    "name": "Red meat and poultry",
+    "id": "3"
+    
+  },
+  {
+    "name": "Stew",
+    "id": "4"
+  },
+  {
+    "name": "Mutton and poultry",
+    "id": "5"
+
+  },
+  {
+    "name": "Dessert",
+    "id": "6"
+
+  },
+  {
+    "name": "Wine",
+    "id": "7"
+
+  }
+]
+
+// food_menu.json
+
+[
+    {
+        "name": "Brie Cheese ",
+        "price": "33",
+        "remark": "Sign must be ordered, netizens recommend ",
+        "type_id": "1",
+        "score": "5",
+        "image_url": "type_1_01.png"
+    },
+    {
+        "name": "Conte Cheese ",
+        "price": "38",
+        "remark": "Monthly sales 70",
+        "type_id": "1",
+        "score": "4.5",
+        "image_url": "type_1_02.png"
+    },
+    {
+        "name": "Camembert Cheese ",
+        "price": "33.8",
+        "remark": "Monthly sales 100+ praise 60%",
+        "type_id": "1",
+        "score": "5",
+        "image_url": "type_1_03.png"
+        
+    },
+    {
+        "name": "Baguette ",
+        "price": "25",
+        "remark": "Monthly sales 100+ praise 100%",
+        "type_id": "1",
+        "score": "5",
+        "image_url": "type_1_04.jpeg"
+    },
+    {
+        "name": "Brioche ",
+        "price": "38",
+        "remark": "Monthly sales 88",
+        "type_id": "1",
+        "score": "5",
+        "image_url": "type_1_05.jpeg"
+        
+    },
+    {
+        "name": "Croissants ",
+        "price": "32",
+        "remark": "Monthly sales 87",
+        "type_id": "1",
+        "score": "5",
+        "image_url": "type_1_06.jpeg"
+        
+    },
+    {
+        "name": "Brittany Oyster ",
+        "price": "48",
+        "remark": "Number four ",
+        "type_id": "2",
+        "score": "3",
+        "image_url": "type_2_01.png"
+        
+    },
+    {
+        "name": "Lobster Biske ",
+        "price": "138",
+        "remark": "Number two in sales ",
+        "type_id": "2",
+        "score": "3",
+        "image_url": "type_2_02.jpg"
+        
+    },
+    {
+        "name": "Cod pickle ",
+        "price": "88",
+        "remark": "Recently 100+ people order ",
+        "type_id": "2",
+        "score": "3",
+        "image_url": "type_2_03.jpg"
+        
+    },
+    {
+        "name": "Shrimp vermicelli Salad ",
+        "price": "66",
+        "remark": "Monthly sales 100+",
+        "type_id": "2",
+        "score": "2.5",
+        "image_url": "type_2_04.jpeg"
+        
+    },
+    {
+        "name": "Seafood burger ",
+        "price": "59",
+        "remark": "Kids like to eat online comments ",
+        "type_id": "2",
+        "score": "0.5",
+        "image_url": "type_2_05.jpeg"
+        
+    },
+    {
+        "name": "Seafood kebab ",
+        "price": "25",
+        "remark": "Moderate price ",
+        "type_id": "2",
+        "score": "4.5",
+        "image_url": "type_2_06.jpeg"
+        
+    },
+    {
+        "name": "French bouillon ",
+        "price": "28",
+        "remark": "Next time more ",
+        "type_id": "2",
+        "score": "3",
+        "image_url": "type_2_07.jpg"
+        
+    },
+    {
+        "name": "French rainbow ",
+        "price": "38",
+        "remark": "Sweet and delicious ",
+        "type_id": "2",
+        "score": "3.5",
+        "image_url": "type_2_08.png"
+        
+    },
+    {
+        "name": "French Roast Duck ",
+        "price": "85",
+        "remark": "Monthly sales 100+",
+        "type_id": "3",
+        "score": "3.5",
+        "image_url": "type_3_01.jpg"
+        
+    },
+    {
+        "name": "Duck confit ",
+        "price": "72",
+        "remark": "Paella is the same as in the restaurant ",
+        "type_id": "3",
+        "score": "0.5",
+        "image_url": "type_3_02.png"
+        
+    },
+    {
+        "name": "Fried duck breast ",
+        "price": "50",
+        "remark": "Monthly sales 64",
+        "type_id": "3",
+        "score": "1",
+        "image_url": "type_3_03.png"
+        
+    },
+    {
+        "name": "Carpaccio ",
+        "price": "158",
+        "remark": "Monthly sales 42",
+        "type_id": "3",
+        "score": "4",
+        "image_url": "type_3_04.png"
+        
+    },
+    {
+        "name": "Beef tartar ",
+        "price": "238",
+        "remark": "The material is rich ",
+        "type_id": "3",
+        "score": "3.5",
+        "image_url": "type_3_05.png"
+        
+    },
+    {
+        "name": "Foie gras",
+        "price": "111",
+        "remark": "It's worth recommending.",
+        "type_id": "3",
+        "score": "4.5",
+        "image_url": "type_3_06.png"
+        
+    },
+    {
+        "name": "Fried French Foie gras ",
+        "price": "133",
+        "remark": "Monthly sales 18",
+        "type_id": "3",
+        "score": "4",
+        "image_url": "type_3_07.jpg"
+        
+    },
+    {
+        "name": "Chilled Foie gras ",
+        "price": "135",
+        "remark": "Monthly sales 18",
+        "type_id": "3",
+        "score": "4",
+        "image_url": "type_3_08.jpg"
+        
+    },
+    {
+        "name": "French roast leg of lamb ",
+        "price": "288",
+        "remark": "Monthly sales 18",
+        "type_id": "3",
+        "score": "4.5",
+        "image_url": "type_3_09.jpeg"
+        
+    },
+    {
+        "name": "Beef pudding ",
+        "price": "68",
+        "remark": "Monthly sales 18",
+        "type_id": "3",
+        "score": "4",
+        "image_url": "type_3_10.jpeg"
+        
+    },
+    {
+        "name": "Red wine beef stew ",
+        "price": "155",
+        "remark": "Great value for money ",
+        "type_id": "4",
+        "score": "3",
+        "image_url": "type_4_01.png"
+        
+    },
+    {
+        "name": "Stewed duck in Red Wine ",
+        "price": "88",
+        "remark": "Red wine is very strong ",
+        "type_id": "4",
+        "score": "3.5",
+        "image_url": "type_4_02.jpg"
+        
+    },
+    {
+        "name": "Breton chowder ",
+        "price": "168",
+        "remark": "Monthly sale 19",
+        "type_id": "4",
+        "score": "5",
+        "image_url": "type_4_03.jpeg"
+        
+    },
+    {
+        "name": "Provence Roast Chicken ",
+        "price": "58",
+        "remark": "Monthly sales 15",
+        "type_id": "5",
+        "score": "4.5",
+        "image_url": "type_5_01.png"
+        
+    },
+    {
+        "name": "Provence leg of lamb ",
+        "price": "268",
+        "remark": "Monthly sales 5",
+        "type_id": "5",
+        "score": "4",
+        "image_url": "type_5_02.png"
+        
+    },
+    {
+        "name": "Baked Pigeon in Brittany ",
+        "price": "73",
+        "remark": "Monthly sales 11",
+        "type_id": "5",
+        "score": "5",
+        "image_url": "type_5_03.jpg"
+        
+    },
+    {
+        "name": "French Fruit tart ",
+        "price": "28",
+        "remark": "Traditional French fruit tart ",
+        "type_id": "6",
+        "score": "4.5",
+        "image_url": "type_6_01.jpeg"
+        
+    },
+    {
+        "name": "Creme fraiche ",
+        "price": "18",
+        "remark": "Monthly sales 32",
+        "type_id": "6",
+        "score": "5",
+        "image_url": "type_6_02.png"
+        
+    },
+    {
+        "name": "French Madeleines ",
+        "price": "25",
+        "remark": "Soft and sweet ",
+        "type_id": "6",
+        "score": "5",
+        "image_url": "type_6_03.png"
+        
+    },
+    {
+        "name": "French Puff Pastry ",
+        "price": "28",
+        "remark": "Classic French dessert ",
+        "type_id": "6",
+        "score": "5",
+        "image_url": "type_6_04.png"
+        
+    },
+    {
+        "name": "Crepe ",
+        "price": "18",
+        "remark": "Thin as paper ",
+        "type_id": "6",
+        "score": "5",
+        "image_url": "type_6_05.png"
+        
+    },
+    {
+        "name": "Bordeaux ",
+        "price": "688",
+        "remark": "Monthly sales 6",
+        "type_id": "7",
+        "score": "5",
+        "image_url": "type_7_01.png"
+        
+    },
+    {
+        "name": "Burgundy Wine ",
+        "price": "468",
+        "remark": "Monthly sales 3",
+        "type_id": "7",
+        "score": "5",
+        "image_url": "type_7_02.png"
+        
+    },
+    {
+        "name": "Flower of Paris ",
+        "price": "666",
+        "remark": "Monthly sales 18",
+        "type_id": "7",
+        "score": "5",
+        "image_url": "type_7_03.png"
+        
+    },
+    {
+        "name": "Princess Louis ",
+        "price": "1688",
+        "remark": "Monthly sales 10",
+        "type_id": "7",
+        "score": "5",
+        "image_url": "type_7_04.png"
+        
+    },
+    {
+        "name": "Moet & Chandon ",
+        "price": "388",
+        "remark": "Monthly sales 18",
+        "type_id": "7",
+        "score": "5",
+        "image_url": "type_7_05.png"
+        
+    },
+    {
+        "name": "Alsace Wine ",
+        "price": "760",
+        "remark": "Monthly sales 5",
+        "type_id": "7",
+        "score": "5",
+        "image_url": "type_7_06.jpeg"
+        
+    }
+]
+ 
+// pubspec.yaml
+
+// provider: ^6.0.5
+
+// assets:
+    - lib/data/food_menu.json
+    - lib/data/food_type.json
+    - assets/images/type_1_01.png
+    - assets/images/type_1_02.png
+    - assets/images/type_1_03.png
+    - assets/images/type_1_04.jpeg
+    - assets/images/type_1_05.jpeg
+    - assets/images/type_1_06.jpeg
+    - assets/images/type_2_01.png
+    - assets/images/type_2_02.jpg
+    - assets/images/type_2_03.jpg
+    - assets/images/type_2_04.jpeg
+    - assets/images/type_2_05.jpeg
+    - assets/images/type_2_06.jpeg
+    - assets/images/type_2_07.jpg
+    - assets/images/type_2_08.png
+    - assets/images/type_3_01.jpg
+    - assets/images/type_3_02.png
+    - assets/images/type_3_03.png
+    - assets/images/type_3_04.png
+    - assets/images/type_3_05.png
+    - assets/images/type_3_06.png
+    - assets/images/type_3_07.jpg
+    - assets/images/type_3_08.jpg
+    - assets/images/type_3_09.jpeg
+    - assets/images/type_3_10.jpeg
+    - assets/images/type_4_01.png
+    - assets/images/type_4_02.jpg
+    - assets/images/type_4_03.jpeg
+    - assets/images/type_5_01.png
+    - assets/images/type_5_02.png
+    - assets/images/type_5_03.jpg
+    - assets/images/type_6_01.jpeg
+    - assets/images/type_6_02.png
+    - assets/images/type_6_03.png
+    - assets/images/type_6_04.png
+    - assets/images/type_6_05.png
+    - assets/images/type_7_01.png
+    - assets/images/type_7_02.png
+    - assets/images/type_7_03.png
+    - assets/images/type_7_04.png
+    - assets/images/type_7_05.png
+    - assets/images/type_7_06.jpeg
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
